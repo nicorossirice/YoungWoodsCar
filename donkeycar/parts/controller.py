@@ -121,14 +121,15 @@ class Joystick(object):
 
         if evbuf:
             tval, value, typev, number = struct.unpack('IhBB', evbuf)
-
+            # print('tval: ', tval,'\tvalue: ', value, '\ttypev: ',typev, '\tnumber: ', number, 'pressed')
+            # print(tval, value, typev, number)
             if typev & 0x80:
                 #ignore initialization event
                 return button, button_state, axis, axis_val
 
             if typev & 0x01:
                 button = self.button_map[number]
-                #print(tval, value, typev, number, button, 'pressed')
+                # print('tval: ', tval,'\tvalue: ', value, '\ttypev: ',typev, '\tnumber: ', number, 'pressed')
                 if button:
                     self.button_states[button] = value
                     button_state = value
@@ -673,8 +674,8 @@ class XboxOneJoystick(Joystick):
         self.axis_names = {
             0x00 : 'left_stick_horz',
             0x01 : 'left_stick_vert',
-            0x05 : 'right_stick_vert',
-            0x02 : 'right_stick_horz',
+            0x04 : 'right_stick_vert',
+            0x03 : 'right_stick_horz',
             0x0a : 'left_trigger',
             0x09 : 'right_trigger',
             0x10 : 'dpad_horiz',
@@ -989,6 +990,7 @@ class JoystickController(object):
                 '''
                 then invoke the function attached to that axis
                 '''
+                # print(axis)
                 self.axis_trigger_map[axis](axis_val)
 
             if button and button_state >= 1 and button in self.button_down_trigger_map:
@@ -1015,14 +1017,14 @@ class JoystickController(object):
 
     def set_steering(self, axis_val):
         self.angle = self.steering_scale * axis_val
-        #print("angle", self.angle)
+        # print("angle", self.angle)
 
 
     def set_throttle(self, axis_val):
         #this value is often reversed, with positive value when pulling down
         self.last_throttle_axis_val = axis_val
         self.throttle = (self.throttle_dir * axis_val * self.throttle_scale)
-        #print("throttle", self.throttle)
+        # print("throttle", self.throttle)
         self.on_throttle_changes()
 
 
@@ -1387,6 +1389,7 @@ class XboxOneJoystickController(JoystickController):
             magnitude = (axis_val - minimum) / (maximum - minimum)
             if reversed:
                 magnitude *= -1
+            # print(magnitude)
             self.set_throttle(magnitude)
         return set_magnitude
 
@@ -1395,7 +1398,6 @@ class XboxOneJoystickController(JoystickController):
         '''
         init set of mapping from buttons to function calls
         '''
-
         self.button_down_trigger_map = {
             'a_button': self.toggle_mode,
             'b_button': self.toggle_manual_recording,
@@ -1409,6 +1411,8 @@ class XboxOneJoystickController(JoystickController):
         self.axis_trigger_map = {
             'left_stick_horz': self.set_steering,
             'right_stick_vert': self.set_throttle,
+            # 'left_stick_horz': self.set_steering,
+            # 'left_stick_vert': self.set_throttle,
             # Forza Mode
             'right_trigger': self.magnitude(),
             'left_trigger': self.magnitude(reversed = True),

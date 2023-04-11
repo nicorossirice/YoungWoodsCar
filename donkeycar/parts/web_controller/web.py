@@ -7,7 +7,7 @@ remotes.py
 The client and web server needed to control a car remotely.
 """
 
-
+from tornado.web import authenticated
 import os
 import json
 import logging
@@ -27,6 +27,10 @@ from ... import utils
 
 logger = logging.getLogger(__name__)
 
+# User accounts
+users = {
+    "youngwoods": "loveandsupport",
+}
 
 class RemoteWebServer():
     '''
@@ -128,6 +132,8 @@ class LocalWebController(tornado.web.Application):
 
         handlers = [
             (r"/", RedirectHandler, dict(url="/drive")),
+            (r"/login", LoginHandler),
+            (r"/logout", LogoutHandler),
             (r"/drive", DriveAPI),
             (r"/wsDrive", WebSocketDriveAPI),
             (r"/wsCalibrate", WebSocketCalibrateAPI),
@@ -139,7 +145,10 @@ class LocalWebController(tornado.web.Application):
              {"path": self.static_file_path}),
         ]
 
-        settings = {'debug': True}
+        settings = { "cookie_secret": "my_secret_key",
+            "login_url": "/login", 
+            'debug': True,
+            }
         super().__init__(handlers, **settings)
         print("... you can now go to {}.local:{} to drive "
               "your car.".format(gethostname(), port))
@@ -221,16 +230,27 @@ class LocalWebController(tornado.web.Application):
 
 
 class DriveAPI(RequestHandler):
-
     def get(self):
+        if self.get_secure_cookie('user') is None:
+            self.redirect("/login")
+            return
+        else:
+            logger.info(str(self.get_secure_cookie('user')))
         data = {}
         self.render("templates/vehicle.html", **data)
+
 
     def post(self):
         '''
         Receive post requests as user changes the angle
         and throttle of the vehicle on a the index webpage
         '''
+        if self.get_secure_cookie('user') is None:
+            self.redirect("/login")
+            return
+        else:
+            logger.info(str(self.get_secure_cookie('user')))
+            
         data = tornado.escape.json_decode(self.request.body)
 
         if data.get('angle') is not None:
@@ -349,7 +369,29 @@ class WebSocketCalibrateAPI(tornado.websocket.WebSocketHandler):
     def on_close(self):
         print("Client disconnected")
 
+class LoginHandler(RequestHandler):
+    def get(self):
+        self.render("templates/login.html")
 
+    def post(self):
+        username = self.get_argument("username")
+        password = self.get_argument("password")
+        if username in users and users[username] == password:
+            self.set_secure_cookie("user", username)
+            logger.info(self.get_current_user())
+            self.redirect("/drive")
+            
+        else:
+            self.write("Invalid login")
+            
+    def get_current_user(self):
+        return self.get_secure_cookie("user")
+    
+class LogoutHandler(RequestHandler):
+    def get(self):
+        self.clear_cookie("user")
+        self.redirect("/login")
+           
 class VideoAPI(RequestHandler):
     '''
     Serves a MJPEG of the images posted from the vehicle.
@@ -387,6 +429,7 @@ class BaseHandler(RequestHandler):
     async def get(self):
         data = {}
         await self.render("templates/base_fpv.html", **data)
+        
 
 
 class WebFpv(Application):
